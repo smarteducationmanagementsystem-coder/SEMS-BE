@@ -22,9 +22,24 @@ const StorageUsage = require("../models/platformadmin-storage");
 const PlatformPricing = require("../models/platformadmin-pricing");
 const PlatformFooter = require("../models/platformadmin-footer");
 const PlatformContactPage = require("../models/platformadmin-contact-page");
+const PlatformLanding = require("../models/platformadmin-landing");
 const { ApiError } = require("../utils/apiError");
 const { hashSecret, verifySecret } = require("../utils/password");
-const { destroyAsset, folderBytes, institutionFolder } = require("./cloudinary.service");
+const { destroyAsset, folderBytes, institutionFolder, uploadPlatformImage } = require("./cloudinary.service");
+
+/** Slot name used in the URL and the upload field -> field stored in the database. */
+const LANDING_SLOTS = {
+  signupimage: "signupImage",
+  loginimage: "loginImage",
+  logoimage: "logoImage",
+  aboutimage: "aboutImage",
+};
+
+function landingField(slot) {
+  const field = LANDING_SLOTS[String(slot || "").toLowerCase()];
+  if (!field) throw new ApiError(404, "That landing image does not exist.");
+  return field;
+}
 const { sendPlatformMail } = require("./platformadmin-mail");
 
 const CHILD_MODELS = [Student, Teacher, StaffMember, HiringStaff, ClassRoom, Subject, AttendanceRecord, StaffAttendance, FeeSlip, ResultSheet, ResultImage, StudentQuery, Role, Settings, PlatformPayment, StorageUsage];
@@ -339,10 +354,7 @@ function platformAdminService() {
     },
 
     async pricing() {
-      const existing = await PlatformPricing.findOne({ key: "public" });
-      if (existing) return presentPricing(existing);
-      const created = await PlatformPricing.create({ key: "public", plans: defaultPlans(), payment: { accountName: "", accountNumber: "", detail: "" } });
-      return presentPricing(created);
+      return presentPricing(await PlatformPricing.findOne({ key: "public" }));
     },
 
     async savePricing(input) {
@@ -386,6 +398,35 @@ function platformAdminService() {
       return presentContactPage(saved);
     },
 
+    async landing() {
+      return presentLanding(await PlatformLanding.findOne({ key: "public" }));
+    },
+
+    async saveLandingImage(slot, file) {
+      const field = landingField(slot);
+      if (!file?.buffer?.length) throw new ApiError(400, "Choose an image file.");
+      const uploaded = await uploadPlatformImage(field.toLowerCase(), file.buffer, file.mimetype, file.originalname);
+      const saved = await PlatformLanding.findOneAndUpdate(
+        { key: "public" },
+        { $set: { [field]: { url: uploaded.url, publicId: uploaded.publicId } } },
+        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+      );
+      return presentLanding(saved);
+    },
+
+    async removeLandingImage(slot) {
+      const field = landingField(slot);
+      const existing = await PlatformLanding.findOne({ key: "public" });
+      const publicId = existing?.[field]?.publicId || "";
+      const saved = await PlatformLanding.findOneAndUpdate(
+        { key: "public" },
+        { $set: { [field]: { url: "", publicId: "" } } },
+        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+      );
+      await destroyAsset(publicId);
+      return presentLanding(saved);
+    },
+
     async sendEmail(input) {
       const filter = input.institutionId ? { _id: assertId(input.institutionId) } : institutionFilter(input.type, "");
       const institutions = await Institution.find(filter).select("name email");
@@ -396,36 +437,13 @@ function platformAdminService() {
   };
 }
 
-function defaultPlans() {
-  return [
-    {
-      name: "Basic",
-      price: "Rs. 12,000",
-      period: "per month",
-      audience: "Single-campus academies",
-      points: ["Up to 400 students", "Attendance and fee slips", "One institution admin", "Email support"],
-      featured: false,
-      buttonLabel: "Get started",
-    },
-    {
-      name: "Professional",
-      price: "Rs. 28,000",
-      period: "per month",
-      audience: "Schools and colleges",
-      points: ["Up to 2,000 students", "Exams, results, and reports", "Teacher and accountant roles", "Parent and student portals"],
-      featured: true,
-      buttonLabel: "Get started",
-    },
-    {
-      name: "Enterprise",
-      price: "Custom",
-      period: "annual agreement",
-      audience: "Groups and school systems",
-      points: ["Multiple institutions", "Super admin controls", "Dedicated onboarding", "Priority support"],
-      featured: false,
-      buttonLabel: "Get started",
-    },
-  ];
+function presentLanding(doc) {
+  return {
+    signupImage: doc?.signupImage?.url || "",
+    loginImage: doc?.loginImage?.url || "",
+    logoImage: doc?.logoImage?.url || "",
+    aboutImage: doc?.aboutImage?.url || "",
+  };
 }
 
 function defaultFooter() {
@@ -485,7 +503,8 @@ function presentFooter(doc) {
 }
 
 function presentPricing(doc) {
-  const plans = Array.isArray(doc?.plans) && doc.plans.length === 3 ? doc.plans : defaultPlans();
+  // Only cards saved from the platform admin are returned. Nothing is invented here.
+  const plans = Array.isArray(doc?.plans) ? doc.plans : [];
   return {
     plans: plans.map((plan) => ({
       name: plan.name,

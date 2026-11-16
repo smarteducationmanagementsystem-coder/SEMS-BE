@@ -79,6 +79,16 @@ function parseOwnerLogin(body) {
   return { email: requiredEmail(source.email), password };
 }
 
+function parseCredentials(body) {
+  const source = body && typeof body === "object" ? body : {};
+  const password = String(source.password ?? "");
+  const currentPassword = String(source.currentPassword ?? "");
+  if (!currentPassword) throw new ApiError(400, "Enter the current password.");
+  if (password && password.length < 4) throw new ApiError(400, "Password must be at least 4 characters.");
+  if (password.length > 72) throw new ApiError(400, "Password must be 72 characters or fewer.");
+  return { email: requiredEmail(source.email), password, currentPassword };
+}
+
 function requiredInstitutionId(value) {
   const id = String(value ?? "").trim();
   if (!mongoose.isValidObjectId(id)) throw new ApiError(400, "Choose an institution.");
@@ -220,6 +230,7 @@ function parseStaff(body) {
 module.exports = {
   parseSignup,
   parseOwnerLogin,
+  parseCredentials,
   parseDirectoryQuery,
   parseStudentLogin,
   parseTeacherLogin,

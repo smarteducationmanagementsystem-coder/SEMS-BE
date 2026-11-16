@@ -92,4 +92,16 @@ const saveContactPage = asyncHandler(async (req, res) => {
   res.json({ data: await platformAdmin.saveContactPage(req.body) });
 });
 
-module.exports = { login, dashboard, institutions, updateInstitution, institutionStorage, deleteInstitution, payments, markPayment, deletePayments, pendingPayments, recipients, sendEmail, account, updateAccount, saveContact, contacts, pricing, savePricing, footer, saveFooter, contactPage, saveContactPage };
+const landing = asyncHandler(async (req, res) => {
+  res.json({ data: await platformAdmin.landing() });
+});
+
+const saveLandingImage = asyncHandler(async (req, res) => {
+  res.json({ data: await platformAdmin.saveLandingImage(req.params.slot, req.file) });
+});
+
+const removeLandingImage = asyncHandler(async (req, res) => {
+  res.json({ data: await platformAdmin.removeLandingImage(req.params.slot) });
+});
+
+module.exports = { landing, saveLandingImage, removeLandingImage, login, dashboard, institutions, updateInstitution, institutionStorage, deleteInstitution, payments, markPayment, deletePayments, pendingPayments, recipients, sendEmail, account, updateAccount, saveContact, contacts, pricing, savePricing, footer, saveFooter, contactPage, saveContactPage };

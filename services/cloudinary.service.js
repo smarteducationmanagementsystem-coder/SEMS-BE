@@ -82,6 +82,25 @@ async function uploadInstitutionLogo(institution, buffer, mimetype, filename) {
   }
 }
 
+/** Landing images (login, signup, logo, about) are stored once for the whole platform. */
+async function uploadPlatformImage(slot, buffer, mimetype, filename) {
+  if (!isLogoFile(mimetype, filename)) throw new ApiError(400, "Choose an image file.");
+  try {
+    const uploaded = await uploadBuffer(buffer, {
+      folder: "platform/landing",
+      public_id: slot,
+      overwrite: true,
+      invalidate: true,
+      resource_type: "image",
+      unique_filename: false,
+    });
+    return { url: uploaded.secure_url, publicId: uploaded.public_id };
+  } catch (error) {
+    if (error instanceof ApiError && error.status !== 502) throw error;
+    throw uploadFailure(error, "landing image");
+  }
+}
+
 async function uploadResultImage(institution, buffer, mimetype, filename) {
   if (!isLogoFile(mimetype, filename)) throw new ApiError(400, "Choose an image file.");
   const publicId = `result-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -130,4 +149,4 @@ async function folderBytes(prefix) {
   return total;
 }
 
-module.exports = { institutionFolder, isLogoFile, imageMime, uploadInstitutionLogo, uploadResultImage, destroyAsset, folderBytes };
+module.exports = { institutionFolder, isLogoFile, imageMime, uploadInstitutionLogo, uploadPlatformImage, uploadResultImage, destroyAsset, folderBytes };

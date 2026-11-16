@@ -1,6 +1,7 @@
 const Institution = require("../models/Institution");
 const Settings = require("../models/Settings");
 const { ApiError } = require("../utils/apiError");
+const { hashSecret, verifySecret } = require("../utils/password");
 const { presentLocation } = require("./location.service");
 const { destroyAsset, imageMime, uploadInstitutionLogo } = require("./cloudinary.service");
 
@@ -86,10 +87,8 @@ function copyCampus(institution, settings) {
 
 async function updateCampus(auth, input) {
   const institution = await ownedInstitution(auth);
-  if (input.email !== institution.email) {
-    const taken = await Institution.findOne({ email: input.email, _id: { $ne: institution._id } });
-    if (taken) throw new ApiError(409, "That email is already registered. Sign in instead.");
-  }
+  // The sign-in email changes only through updateCredentials, which asks for the current password.
+  input = { ...input, email: institution.email };
   if (input.locationCheckEnabled) {
     const pins = [input.location1, input.location2].filter((pin) => pin.latitude !== null && pin.longitude !== null);
     if (pins.length === 0) throw new ApiError(400, "Capture Location 1 or Location 2 before enabling location.");
@@ -116,6 +115,33 @@ async function updateCampus(auth, input) {
   await settings.save();
   await institution.save();
   return presentCampus(settings);
+}
+
+/** Owner sign-in email and password. Only the signed-in institution's own record is touched. */
+async function updateCredentials(auth, input) {
+  const institution = await Institution.findById(auth.institutionId).select("+passwordHash");
+  if (!institution) throw new ApiError(404, "This institution was not found.");
+  if (!(await verifySecret(input.currentPassword, institution.passwordHash))) {
+    throw new ApiError(401, "Current password is incorrect.");
+  }
+  if (input.email !== institution.email) {
+    const taken = await Institution.findOne({ email: input.email, _id: { $ne: institution._id } });
+    if (taken) throw new ApiError(409, "That email is already registered. Sign in instead.");
+  }
+  institution.email = input.email;
+  if (input.password) institution.passwordHash = await hashSecret(input.password);
+  try {
+    await institution.save();
+  } catch (error) {
+    if (error?.code === 11000) throw new ApiError(409, "That email is already registered. Sign in instead.");
+    throw error;
+  }
+  const settings = await ensureSettings(institution);
+  if (settings.email !== input.email) {
+    settings.email = input.email;
+    await settings.save();
+  }
+  return { email: institution.email };
 }
 
 async function saveLogo(auth, file) {
@@ -171,4 +197,4 @@ async function readLogo(code) {
   return { mime: settings.logoMime || "image/png", buffer: settings.logoData };
 }
 
-module.exports = { attachSettings, updateCampus, saveLogo, removeLogo, readLogo };
+module.exports = { attachSettings, updateCampus, updateCredentials, saveLogo, removeLogo, readLogo };

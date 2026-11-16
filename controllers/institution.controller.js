@@ -5,6 +5,10 @@ const updateCampus = asyncHandler(async (req, res) => {
   res.json({ data: await institutionService.updateCampus(req.auth, req.body) });
 });
 
+const updateCredentials = asyncHandler(async (req, res) => {
+  res.json({ data: await institutionService.updateCredentials(req.auth, req.body) });
+});
+
 const saveLogo = asyncHandler(async (req, res) => {
   res.json({ data: await institutionService.saveLogo(req.auth, req.file) });
 });
@@ -26,4 +30,4 @@ const logoFile = asyncHandler(async (req, res) => {
   res.send(file.buffer);
 });
 
-module.exports = { updateCampus, saveLogo, removeLogo, logoFile };
+module.exports = { updateCampus, updateCredentials, saveLogo, removeLogo, logoFile };

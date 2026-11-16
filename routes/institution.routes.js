@@ -3,7 +3,7 @@ const multer = require("multer");
 const institutionController = require("../controllers/institution.controller");
 const { requireAuth, requireOwner } = require("../middlewares/auth");
 const { validate } = require("../middlewares/validate");
-const { parseCampusSettings } = require("../validators/auth.validator");
+const { parseCampusSettings, parseCredentials } = require("../validators/auth.validator");
 const { ApiError } = require("../utils/apiError");
 
 const upload = multer({
@@ -29,6 +29,7 @@ const router = express.Router();
 
 router.get("/brand/:code/logo", institutionController.logoFile);
 router.put("/", requireAuth, requireOwner, validate(parseCampusSettings), institutionController.updateCampus);
+router.put("/credentials", requireAuth, requireOwner, validate(parseCredentials), institutionController.updateCredentials);
 router.post("/logo", requireAuth, requireOwner, logoUpload, institutionController.saveLogo);
 router.delete("/logo", requireAuth, requireOwner, institutionController.removeLogo);
 
